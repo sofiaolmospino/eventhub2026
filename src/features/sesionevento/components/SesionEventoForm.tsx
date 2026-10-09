@@ -3,6 +3,7 @@ import type { Evento } from '../../evento/models/Evento';
 import { eventoService } from '../../evento/services/eventoService';
 import type { SesionEventoCreateRequest } from '../types/SesionEventoCreateRequest';
 import type { SesionEventoFormData } from '../types/SesionEventoFormData';
+import type { SesionEvento } from '../types/SesionEvento';
 import {
     validarSesionEvento,
     type SesionEventoFormErrors,
@@ -17,7 +18,20 @@ const initialSesionEventoForm: SesionEventoFormData = {
     fechaFin: '',
 };
 
-export default function SesionEventoForm() {
+interface SesionEventoFormProps {
+    sesion?: SesionEvento | null;
+    onSaved?: (
+        sesion: SesionEvento,
+        mode: 'create' | 'edit'
+    ) => void;
+    onCancelEdit?: () => void;
+}
+
+export default function SesionEventoForm({
+                                             sesion,
+                                             onSaved,
+                                             onCancelEdit,
+                                         }: SesionEventoFormProps) {
     const [formData, setFormData] =
         useState<SesionEventoFormData>(initialSesionEventoForm);
 
@@ -35,13 +49,32 @@ export default function SesionEventoForm() {
                 setEventos(data);
             } catch (error) {
                 console.error('Error al cargar eventos:', error);
+                setMensaje('No se pudieron cargar los eventos.');
             } finally {
                 setCargandoEventos(false);
             }
         };
 
-        cargarEventos();
+        void cargarEventos();
     }, []);
+
+    useEffect(() => {
+        if (sesion) {
+            setFormData({
+                eventoId: String(sesion.eventoId),
+                sede: sesion.sede,
+                sala: sesion.sala,
+                fechaInicio: sesion.fechaInicio.slice(0, 16),
+                fechaFin: sesion.fechaFin.slice(0, 16),
+            });
+        } else {
+            setFormData({ ...initialSesionEventoForm });
+        }
+
+        setErrors({});
+        setMensaje('');
+        setIntentoGuardar(false);
+    }, [sesion]);
 
     const handleChange = (
         e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -61,7 +94,6 @@ export default function SesionEventoForm() {
         setIntentoGuardar(true);
 
         const validationErrors = validarSesionEvento(formData);
-
         setErrors(validationErrors);
 
         if (Object.keys(validationErrors).length > 0) {
@@ -70,8 +102,8 @@ export default function SesionEventoForm() {
 
         const sesionEventoPayload: SesionEventoCreateRequest = {
             eventoId: Number(formData.eventoId),
-            sede: formData.sede,
-            sala: formData.sala,
+            sede: formData.sede.trim(),
+            sala: formData.sala.trim(),
             fechaInicio: new Date(formData.fechaInicio).toISOString(),
             fechaFin: new Date(formData.fechaFin).toISOString(),
         };
@@ -79,21 +111,33 @@ export default function SesionEventoForm() {
         try {
             setEnviando(true);
 
-            await sesionEventoService.crear(sesionEventoPayload);
+            if (sesion) {
+                const actualizada = await sesionEventoService.actualizar(
+                    sesion.sesionEventoId,
+                    sesionEventoPayload
+                );
 
-            setMensaje('Sesión de evento creada correctamente.');
+                onSaved?.(actualizada, 'edit');
+                setMensaje('Sesión de evento actualizada correctamente.');
+            } else {
+                const creada = await sesionEventoService.crear(
+                    sesionEventoPayload
+                );
 
-            setFormData(initialSesionEventoForm);
+                onSaved?.(creada, 'create');
+                setFormData({ ...initialSesionEventoForm });
+                setMensaje('Sesión de evento creada correctamente.');
+            }
+
             setErrors({});
             setIntentoGuardar(false);
-
         } catch (error) {
-            console.error('Error al crear sesión de evento:', error);
+            console.error('Error al guardar sesión de evento:', error);
 
             setMensaje(
                 error instanceof Error
                     ? error.message
-                    : 'No se pudo crear la sesión de evento.'
+                    : 'No se pudo guardar la sesión de evento.'
             );
         } finally {
             setEnviando(false);
@@ -101,11 +145,15 @@ export default function SesionEventoForm() {
     };
 
     const handleLimpiar = () => {
-        setFormData(initialSesionEventoForm);
+        if (sesion) {
+            onCancelEdit?.();
+        } else {
+            setFormData({ ...initialSesionEventoForm });
+        }
+
         setErrors({});
         setMensaje('');
         setIntentoGuardar(false);
-        setEnviando(false);
     };
 
     return (
@@ -114,8 +162,11 @@ export default function SesionEventoForm() {
             onSubmit={handleSubmit}
             noValidate
         >
-            <div className="form-grid">
+            <h2>
+                {sesion ? 'Editar sesión de evento' : 'Crear sesión de evento'}
+            </h2>
 
+            <div className="form-grid">
                 <label>
                     Evento
 
@@ -124,6 +175,7 @@ export default function SesionEventoForm() {
                         value={formData.eventoId}
                         onChange={handleChange}
                         disabled={cargandoEventos || enviando}
+                        required
                     >
                         <option value="">
                             {cargandoEventos
@@ -134,7 +186,7 @@ export default function SesionEventoForm() {
                         {eventos.map((evento) => (
                             <option
                                 key={evento.eventoId}
-                                value={evento.eventoId}
+                                value={String(evento.eventoId)}
                             >
                                 {evento.nombre}
                             </option>
@@ -158,6 +210,7 @@ export default function SesionEventoForm() {
                         onChange={handleChange}
                         placeholder="Ej. La Paz"
                         disabled={enviando}
+                        required
                     />
 
                     {errors.sede && (
@@ -177,6 +230,7 @@ export default function SesionEventoForm() {
                         onChange={handleChange}
                         placeholder="Ej. Sala 1"
                         disabled={enviando}
+                        required
                     />
 
                     {errors.sala && (
@@ -195,6 +249,7 @@ export default function SesionEventoForm() {
                         value={formData.fechaInicio}
                         onChange={handleChange}
                         disabled={enviando}
+                        required
                     />
 
                     {errors.fechaInicio && (
@@ -213,6 +268,7 @@ export default function SesionEventoForm() {
                         value={formData.fechaFin}
                         onChange={handleChange}
                         disabled={enviando}
+                        required
                     />
 
                     {errors.fechaFin && (
@@ -221,11 +277,10 @@ export default function SesionEventoForm() {
                         </small>
                     )}
                 </label>
-
             </div>
 
             {mensaje && (
-                <div className="form-success">
+                <div className="state-card">
                     {mensaje}
                 </div>
             )}
@@ -237,26 +292,26 @@ export default function SesionEventoForm() {
             )}
 
             <div className="form-actions">
-
                 <button
                     type="button"
                     className="btn-secondary"
                     onClick={handleLimpiar}
                     disabled={enviando}
                 >
-                    Limpiar
+                    {sesion ? 'Cancelar edición' : 'Limpiar'}
                 </button>
 
                 <button
                     type="submit"
                     className="btn-primary"
-                    disabled={enviando}
+                    disabled={enviando || cargandoEventos}
                 >
                     {enviando
                         ? 'Guardando...'
-                        : 'Guardar sesión'}
+                        : sesion
+                            ? 'Actualizar sesión'
+                            : 'Guardar sesión'}
                 </button>
-
             </div>
         </form>
     );

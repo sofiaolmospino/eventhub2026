@@ -9,8 +9,14 @@ export function validarSesionEvento(
 ): SesionEventoFormErrors {
     const errors: SesionEventoFormErrors = {};
 
-    if (!data.eventoId) {
-        errors.eventoId = 'Debe seleccionar un evento.';
+    const eventoId = Number(data.eventoId);
+
+    if (
+        !data.eventoId.trim() ||
+        !Number.isInteger(eventoId) ||
+        eventoId <= 0
+    ) {
+        errors.eventoId = 'Debe seleccionar un evento válido.';
     }
 
     if (!data.sede.trim()) {
@@ -32,6 +38,8 @@ export function validarSesionEvento(
     if (
         data.fechaInicio &&
         data.fechaFin &&
+        !Number.isNaN(new Date(data.fechaInicio).getTime()) &&
+        !Number.isNaN(new Date(data.fechaFin).getTime()) &&
         new Date(data.fechaFin) <= new Date(data.fechaInicio)
     ) {
         errors.fechaFin =

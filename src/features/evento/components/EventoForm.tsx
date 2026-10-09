@@ -1,4 +1,5 @@
 import {
+    useEffect,
     useState,
     type ChangeEvent,
     type FormEvent,
@@ -25,11 +26,15 @@ const initialEventoForm: EventoFormData = {
 };
 
 interface EventoFormProps {
-    onCreated?: (evento: Evento) => void;
+    evento?: Evento | null;
+    onSaved: (evento: Evento, mode: 'create' | 'edit') => void;
+    onCancelEdit?: () => void;
 }
 
 export default function EventoForm({
-                                       onCreated,
+                                       evento,
+                                       onSaved,
+                                       onCancelEdit,
                                    }: EventoFormProps) {
     const [formData, setFormData] =
         useState<EventoFormData>(initialEventoForm);
@@ -44,6 +49,28 @@ export default function EventoForm({
 
     const [apiError, setApiError] =
         useState('');
+
+    const isEditing = evento != null;
+
+    useEffect(() => {
+        if (evento) {
+            setFormData({
+                nombre: evento.nombre,
+                descripcion: evento.descripcion,
+                responsable: evento.responsable,
+                modalidad: evento.modalidad,
+                fechaInicio: evento.fechaInicio,
+                fechaFin: evento.fechaFin,
+                capacidad: evento.capacidad,
+                usuarioId: evento.usuarioId,
+            });
+        } else {
+            setFormData(initialEventoForm);
+        }
+
+        setErrors({});
+        setApiError('');
+    }, [evento]);
 
     const handleChange = (
         e: ChangeEvent<
@@ -103,18 +130,31 @@ export default function EventoForm({
         try {
             setSubmitting(true);
 
-            const creado =
-                await eventoService.crear(
-                    eventoPayload
-                );
+            if (evento) {
+                const actualizado =
+                    await eventoService.actualizar(
+                        evento.eventoId,
+                        eventoPayload
+                    );
 
-            onCreated?.(creado);
+                onSaved(actualizado, 'edit');
+            } else {
+                const creado =
+                    await eventoService.crear(
+                        eventoPayload
+                    );
 
-            setFormData(initialEventoForm);
+                onSaved(creado, 'create');
+
+                setFormData(initialEventoForm);
+            }
+
             setErrors({});
 
             setMensaje(
-                'Evento creado correctamente.'
+                evento
+                    ? 'Evento actualizado correctamente.'
+                    : 'Evento creado correctamente.'
             );
         } catch (err) {
             setApiError(
@@ -140,6 +180,12 @@ export default function EventoForm({
             onSubmit={handleSubmit}
             noValidate
         >
+            <h2>
+                {isEditing
+                    ? `Editar evento #${evento?.eventoId}`
+                    : 'Nuevo evento'}
+            </h2>
+
             <div className="form-grid">
 
                 <label>
@@ -329,8 +375,21 @@ export default function EventoForm({
                 >
                     {submitting
                         ? 'Guardando...'
-                        : 'Guardar evento'}
+                        : isEditing
+                            ? 'Actualizar evento'
+                            : 'Crear evento'}
                 </button>
+
+                {isEditing && (
+                    <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={onCancelEdit}
+                        disabled={submitting}
+                    >
+                        Cancelar edición
+                    </button>
+                )}
 
             </div>
         </form>
