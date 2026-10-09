@@ -1,4 +1,6 @@
 @import './tokens.css';
+@import './ui.css';
+
 html,
 body {
     color: #4a2433;
